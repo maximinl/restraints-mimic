@@ -1,0 +1,141 @@
+import pandas as pd
+import numpy as np
+import statsmodels.api as sm
+
+# --- Assume X_final_primary and model_df_aligned_for_diagnostics exist ---
+# X_final_primary: Predictor DataFrame for the final primary model (includes interactions)
+# model_df_aligned_for_diagnostics: Aligned DataFrame with observed outcomes and original variables
+# Assume 'physically_restrained' and 'death_within_24h' columns exist in model_df_aligned_for_diagnostics
+
+# IMPORTANT: Ensure these variables are available from prior execution AND
+# that the 'physically_restrained' and 'death_within_24h' columns exist
+# in model_df_aligned_for_diagnostics.
+required_vars = ['X_final_primary', 'model_df_aligned_for_diagnostics']
+required_outcome_cols = ['physically_restrained', 'death_within_24h']
+
+if not all(v in locals() or v in globals() for v in required_vars):
+    raise NameError(f"Missing required variables: {', '.join([v for v in required_vars if v not in locals() and v not in globals()])}. Please run the previous code blocks first.")
+
+if not all(col in model_df_aligned_for_diagnostics.columns for col in required_outcome_cols):
+    missing = [col for col in required_outcome_cols if col not in model_df_aligned_for_diagnostics.columns]
+    raise ValueError(f"Missing required outcome columns for secondary analysis: {missing}. Ensure these columns exist in model_df_aligned_for_diagnostics.")
+
+
+print("\n--- Secondary Analyses ---")
+
+# Use the aligned DataFrame which should contain the outcome variables
+analysis_df = model_df_aligned_for_diagnostics.copy() # Work with a copy
+
+# Ensure X_final_primary index matches analysis_df index
+# X_final_primary should already be aligned based on previous steps, but double-check
+if not X_final_primary.index.equals(analysis_df.index):
+    # Re-align X_final_primary if its index somehow drifted
+    X_final_primary_aligned = X_final_primary.loc[analysis_df.index].copy()
+    print("Info: Re-aligned X_final_primary to match analysis_df index for secondary analyses.")
+else:
+    X_final_primary_aligned = X_final_primary.copy() # Use as is if aligned
+
+
+# --- Secondary Analysis 1: Binary Restraint Use (Yes/No) ---
+print("\n--- Secondary Analysis 1: Binary Restraint Use (Yes/No) ---")
+
+y_binary_restraint = analysis_df['physically_restrained'].astype(int)
+
+# Fit Logistic Regression Model
+print("\nFitting Logistic Regression for Binary Restraint Use...")
+# Logistic Regression is a type of GLM with a Binomial family and Logit link (which is default)
+binary_restraint_model = sm.GLM(y_binary_restraint, X_final_primary_aligned, family=sm.families.Binomial())
+
+# Check if the outcome has variation (not all 0s or all 1s)
+if y_binary_restraint.nunique() < 2:
+     print(f"Warning: Outcome variable 'physically_restrained' has no variation (all {y_binary_restraint.iloc[0]}). Model cannot be fitted.")
+else:
+    try:
+        binary_restraint_result = binary_restraint_model.fit()
+
+        print("\n--- Binary Restraint Use Model Summary ---")
+        print(binary_restraint_result.summary(xname=X_final_primary_aligned.columns.tolist())) # Use aligned column names
+
+        print("\n--- Binary Restraint Use Model Odds Ratios ---")
+        try:
+            # Calculate Odds Ratios and 95% Confidence Intervals
+            odds_ratios = np.exp(binary_restraint_result.params)
+            conf_int = np.exp(binary_restraint_result.conf_int())
+            p_values = binary_restraint_result.pvalues
+
+            # Create a DataFrame for easier viewing
+            or_df = pd.DataFrame({
+                'Var': odds_ratios.index,
+                'OR': odds_ratios.values,
+                'CIL': conf_int.iloc[:, 0].values,
+                'CIU': conf_int.iloc[:, 1].values,
+                'p': p_values.values
+            })
+            or_df['OR (95% CI)'] = or_df.apply(lambda r: f"{r['OR']:.2f} ({r['CIL']:.2f}-{r['CIU']:.2f})" if pd.notna(r['OR']) else "N/A", axis=1)
+
+            # Print the relevant columns
+            print(or_df[['Var', 'OR (95% CI)', 'p']])
+
+        except Exception as e:
+            print(f"Error calculating ORs for binary restraint model: {e}")
+
+
+    except Exception as e:
+        print(f"\nError fitting the binary restraint model: {e}")
+
+
+print("\n--- Secondary Analysis 1 Complete ---")
+
+
+# --- Secondary Analysis 2: Death within 24h of Restraint (Yes/No) ---
+print("\n\n--- Secondary Analysis 2: Death within 24h of Restraint (Yes/No) ---")
+
+y_binary_death_restraint = analysis_df['death_within_24h'].astype(int)
+
+# Fit Logistic Regression Model
+print("\nFitting Logistic Regression for Death within 24h of Restraint...")
+# Logistic Regression (Binomial family, Logit link)
+death_restraint_model = sm.GLM(y_binary_death_restraint, X_final_primary_aligned, family=sm.families.Binomial())
+
+# Check if the outcome has variation (not all 0s or all 1s)
+if y_binary_death_restraint.nunique() < 2:
+     print(f"Warning: Outcome variable 'death_within_24h' has no variation (all {y_binary_death_restraint.iloc[0]}). Model cannot be fitted.")
+else:
+    try:
+        death_restraint_result = death_restraint_model.fit()
+
+        print(f"\n--- Death within 24h of Restraint Model Summary ---")
+        print(death_restraint_result.summary(xname=X_final_primary_aligned.columns.tolist()))
+
+        print(f"\n--- Death within 24h of Restraint Model Odds Ratios ---")
+        try:
+            # Calculate Odds Ratios and 95% Confidence Intervals
+            odds_ratios = np.exp(death_restraint_result.params)
+            conf_int = np.exp(death_restraint_result.conf_int())
+            p_values = death_restraint_result.pvalues
+
+            # Create a DataFrame for easier viewing
+            or_df = pd.DataFrame({
+                'Var': odds_ratios.index,
+                'OR': odds_ratios.values,
+                'CIL': conf_int.iloc[:, 0].values,
+                'CIU': conf_int.iloc[:, 1].values,
+                'p': p_values.values
+            })
+            or_df['OR (95% CI)'] = or_df.apply(lambda r: f"{r['OR']:.2f} ({r['CIL']:.2f}-{r['CIU']:.2f})" if pd.notna(r['OR']) else "N/A", axis=1)
+
+            # Print the relevant columns
+            print(or_df[['Var', 'OR (95% CI)', 'p']])
+
+        except Exception as e:
+            print(f"Error calculating ORs for death within 24h model: {e}")
+
+
+    except Exception as e:
+        print(f"\nError fitting the death within 24h model: {e}")
+
+
+print(f"\n--- Secondary Analyses Complete ---")
+
+# --- Next Steps: Sensitivity Analyses ---
+print("\nNext step according to protocol: Sensitivity Analyses.")
