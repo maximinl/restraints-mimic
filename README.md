@@ -60,9 +60,9 @@ Our analysis employed:
 
 ## Clinical Impact
 
-This research provides evidence that:
-- Current restraint practices exhibit systematic racial bias
-- Federal reporting policies have failed to reduce restraint use
+This research provides support for the claim that:
+- Current restraint practices exhibit systematic ethnic bias
+- Federal reporting policies have not reduced restraint use
 - Healthcare organizations need targeted interventions addressing both overall restraint reduction and demographic equity
 - Real time clinical decision support systems could help identify and prevent biased restraint decisions
 
